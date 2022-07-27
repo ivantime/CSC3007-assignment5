@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.3/leaflet.css"
+    />
+    <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
+    <script src="https://cdn.onemap.sg/leaflet/onemap-leaflet.js"></script>
+    <script src="http://d3js.org/d3.v4.min.js" charset="utf-8"></script>
+  </head>
+  <body>
+    <div id="map"></div>
+    <style>
+      #map {
+        width: 1000px;
+        height: 600px;
+      }
+    </style>
+    <script src="script.js"></script>
+  </body>
+  <script>
+    L.Icon.Default.imagePath =
+      "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.4.0/images";
+    const requestUrl = "https://api.data.gov.sg/v1/environment/psi";
+
+    var center = L.bounds([1.56073, 104.11475], [1.16, 103.502]).getCenter();
+    var map = L.map("map").setView([center.x, center.y], 12);
+    var basemap = L.tileLayer(
+      "https://maps-{s}.onemap.sg/v3/Default/{z}/{x}/{y}.png",
+      {
+        detectRetina: true,
+        maxZoom: 18,
+        minZoom: 11,
+      }
+    );
+    map.setMaxBounds([
+      [1.56073, 104.1147],
+      [1.16, 103.502],
+    ]);
+
+    //get Unique values
+    function uniqBy(a, key) {
+      var seen = {};
+      return a.filter(function (item) {
+        var k = key(item);
+        return seen.hasOwnProperty(k) ? false : (seen[k] = true);
+      });
+    }
+
+    const requestJSON = async (url) => {
+      const response = await (await fetch(url)).json();
+      data = response.region_metadata;
+      dataReading = response.items[0].readings.psi_twenty_four_hourly;
+      var compiledData = {};
+      var valueRange = [];
+      
+      valueRange.push(0);
+      for (i = 0; i < data.length; i++) {
+        if (data[i].name !== "national") {
+          compiledData[data[i].name] = {
+            name: data[i].name,
+            psi24hr: dataReading[data[i].name],
+            label_location: data[i].label_location,
+          };
+          valueRange.push(dataReading[data[i].name]);
+        }
+      }
+      b = uniqBy(valueRange, JSON.stringify);
+
+      //sort by ascending integer order
+      valueRange = b.sort(function (a, b) {
+        return a - b;
+      });
+
+      var color_scale = d3
+        .scaleLinear()
+        .domain(valueRange)
+        .range(["white", "green"]);
+
+      for (j = 0; j < Object.keys(compiledData).length; j++) {
+        L.circle(
+          [
+            compiledData[Object.keys(compiledData)[j]].label_location.latitude,
+            compiledData[Object.keys(compiledData)[j]].label_location.longitude,
+          ],
+          2000,
+          {
+            color: "green",
+            opacity: 1,
+            fillColor: color_scale(
+              compiledData[Object.keys(compiledData)[j]].psi24hr
+            ),
+            fillOpacity: 0.4,
+          }
+        ).addTo(map);
+      }
+
+      for (j = 0; j < Object.keys(compiledData).length; j++) {
+        marker = new L.Marker(
+          [
+            compiledData[Object.keys(compiledData)[j]].label_location.latitude,
+            compiledData[Object.keys(compiledData)[j]].label_location.longitude,
+          ],
+          {
+            icon: new L.DivIcon({
+              className: "my-div-icon",
+              html:
+                '<div class="my-div-span" style="font-size: 20px; margin-left:-6px; margin-top:-6px; color:yellow">' +
+                compiledData[Object.keys(compiledData)[j]].psi24hr.toString() +
+                "</div>",
+            }),
+          }
+        ).addTo(map);
+      }
+    };
+    basemap.addTo(map);
+
+    requestJSON(requestUrl);
+  </script>
+</html>
